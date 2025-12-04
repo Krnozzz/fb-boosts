@@ -4,6 +4,10 @@ import time
 import json
 import os
 from datetime import datetime
+import colorama
+from colorama import Fore, Style
+
+colorama.init(autoreset=True)
 
 class NGLSpammer:
     def __init__(self):
@@ -20,6 +24,9 @@ class NGLSpammer:
             "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
         ]
         self.proxy_pool = self._fetch_proxies()
+        self.success_count = 0
+        self.failed_count = 0
+        self.error_count = 0
     
     def _load_messages(self):
         """Load messages from text file or generate defaults"""
@@ -103,27 +110,32 @@ class NGLSpammer:
             )
             
             if response.status_code == 200:
+                self.success_count += 1
                 return True
             else:
-                print(f"Failed to send message: {response.status_code}")
+                self.failed_count += 1
                 return False
                 
         except Exception as e:
+            self.error_count += 1
             print(f"Error sending message: {e}")
             return False
     
     def run(self, link, count=100):
         """Send multiple messages to a user via link"""
         start_time = datetime.now()
+        print(f"{Fore.CYAN}Starting spamming {count} messages to {link}...")
         
         for i in range(count):
             message = random.choice(self.messages)
             success = self.send_message(link, message)
             
             if success:
-                print(f"Message {i+1}/{count} sent successfully")
+                status = f"{Fore.GREEN}✓"
             else:
-                print(f"Failed to send message {i+1}/{count}")
+                status = f"{Fore.RED}✗"
+            
+            print(f"Message {i+1}/{count}: {status} Sent")
             
             # Rate limiting
             if i < count - 1:  # Don't sleep after last message
@@ -131,7 +143,15 @@ class NGLSpammer:
         
         end_time = datetime.now()
         duration = end_time - start_time
-        print(f"Completed {count} messages in {duration.total_seconds():.2f} seconds")
+        
+        # Print summary
+        print("\n" + "="*50)
+        print(f"{Fore.GREEN}Success: {self.success_count}")
+        print(f"{Fore.RED}Failed: {self.failed_count}")
+        print(f"{Fore.YELLOW}Errors: {self.error_count}")
+        print(f"{Fore.BLUE}Total: {count}")
+        print(f"{Fore.MAGENTA}Duration: {duration.total_seconds():.2f} seconds")
+        print("="*50)
 
 if __name__ == "__main__":
     # Get target link from command line or prompt
