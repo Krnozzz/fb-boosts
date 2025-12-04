@@ -7,7 +7,6 @@ from datetime import datetime
 
 class NGLSpammer:
     def __init__(self):
-        self.base_url = "https://ngl.link"
         self.session = requests.Session()
         self.headers = {
             "User-Agent": "Mozilla/5.0",
@@ -16,12 +15,9 @@ class NGLSpammer:
         self.messages = self._load_messages()
         self.rate_limit = 60  # seconds between messages
         self.proxy_sources = [
-            "https://www.proxy-list.download/api/v1/get?type=http",
-            "https://www.proxy-list.download/api/v1/get?type=https",
-            "https://www.proxy-list.download/api/v1/get?type=socks4",
-            "https://www.proxy-list.download/api/v1/get?type=socks5",
-            "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt",
-            "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt"
+            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
+            "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
         ]
         self.proxy_pool = self._fetch_proxies()
     
@@ -84,9 +80,10 @@ class NGLSpammer:
                 raise Exception("No available proxies")
         return random.choice(self.proxy_pool)
     
-    def send_message(self, username, message):
-        """Send message to NGL user"""
-        url = f"{self.base_url}/{username}"
+    def send_message(self, link, message):
+        """Send message to NGL user via full link"""
+        # Extract username from link
+        username = link.split("/")[-1]
         
         # Prepare payload
         payload = {
@@ -99,7 +96,7 @@ class NGLSpammer:
         
         try:
             response = self.session.post(
-                url, 
+                link, 
                 json=payload,
                 headers=self.headers,
                 proxies=proxies
@@ -115,13 +112,13 @@ class NGLSpammer:
             print(f"Error sending message: {e}")
             return False
     
-    def run(self, username, count=100):
-        """Send multiple messages to a user"""
+    def run(self, link, count=100):
+        """Send multiple messages to a user via link"""
         start_time = datetime.now()
         
         for i in range(count):
             message = random.choice(self.messages)
-            success = self.send_message(username, message)
+            success = self.send_message(link, message)
             
             if success:
                 print(f"Message {i+1}/{count} sent successfully")
@@ -137,15 +134,15 @@ class NGLSpammer:
         print(f"Completed {count} messages in {duration.total_seconds():.2f} seconds")
 
 if __name__ == "__main__":
-    # Get target username from command line or prompt
+    # Get target link from command line or prompt
     import sys
     if len(sys.argv) > 1:
-        username = sys.argv[1]
+        link = sys.argv[1]
     else:
-        username = input("Enter NGL username: ")
+        link = input("Enter NGL link: ")
     
     # Optional: specify message count
     count = int(sys.argv[2]) if len(sys.argv) > 2 else 100
     
     spammer = NGLSpammer()
-    spammer.run(username, count)
+    spammer.run(link, count)
