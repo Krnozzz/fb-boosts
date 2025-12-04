@@ -37,27 +37,39 @@ def ngl():
         ]
         for url in sources:
             try:
+                print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Fetching proxies from {url} ..."))
                 r = requests.get(url, timeout=10)
                 new_proxies = [p.strip() for p in r.text.splitlines() if p.strip() and ":" in p]
                 proxies += new_proxies
-            except Exception:
-                continue
+                print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Got {len(new_proxies)} proxies from {url}"))
+            except Exception as e:
+                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Failed to fetch from {url}: {e}"))
+        print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Total proxies fetched: {len(proxies)}"))
         return proxies
 
     def Proxy():
         proxies_list = fetch_proxies()
+        if not proxies_list:
+            print("[-] No proxies fetched, using direct connection")
+            return None
+
         random.shuffle(proxies_list)
-        for proxy in proxies_list:
+        for proxy in proxies_list[:20]:  # test only first 20
             if proxy.startswith("socks5://"):
                 test_proxy = {"http": proxy, "https": proxy}
             else:
                 test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+            print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Testing proxy: {proxy}"))
             try:
                 r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
                 if r.status_code == 200:
+                    print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Using proxy: {proxy}"))
                     return test_proxy   # ✅ immediately return first working proxy
             except Exception:
+                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Dead proxy skipped: {proxy}"))
                 continue
+
+        print("[-] No working proxies found, using direct connection")
         return None
 
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -82,6 +94,9 @@ def ngl():
 
     sent_count = 0
     failed_count = 0
+
+    print(Colorate.Vertical(Colors.green_to_blue,"**********************************************************"))
+    print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Starting run with proxy: {proxies if proxies else 'Direct connection'}"))
 
     while sent_count < Count:
         headers = {
@@ -114,15 +129,21 @@ def ngl():
                 sent_count += 1
             else:
                 failed_count += 1
+            progress = f"{sent_count + failed_count}/{Count}"
             print(f"Sent: {sent_count}")
             print(f"Failed: {failed_count}")
+            print(f"Progress: {progress}")
             time.sleep(delay)
         except (ProxyError, ConnectionError, Timeout):
             failed_count += 1
+            progress = f"{sent_count + failed_count}/{Count}"
             print(f"Sent: {sent_count}")
             print(f"Failed: {failed_count}")
+            print(f"Progress: {progress}")
             if use_proxy == "y":
                 proxies = Proxy()  # fetch new proxy immediately
             continue
+
+    print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Run complete — Sent: {sent_count}, Failed: {failed_count}, Progress: {sent_count+failed_count}/{Count}"))
 
 ngl()
