@@ -28,7 +28,7 @@ logging.basicConfig(
 
 class FacebookAutomation:
     def __init__(self, config_file=None):
-        # Load config or use defaults
+        # Updated proxy sources
         self.config = {
             "delay_range": (1, 3),
             "max_retries": 3,
@@ -39,9 +39,12 @@ class FacebookAutomation:
             "redis_host": "localhost",
             "redis_port": 6379,
             "proxy_sources": [
-                "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
-                "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
-                "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
+                "https://www.proxy-list.download/api/v1/get?type=http",
+                "https://www.proxy-list.download/api/v1/get?type=https",
+                "https://www.proxy-list.download/api/v1/get?type=socks4",
+                "https://www.proxy-list.download/api/v1/get?type=socks5",
+                "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt",
+                "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt"
             ]
         }
         
@@ -78,6 +81,41 @@ class FacebookAutomation:
             logging.error(f"Email file '{filename}' not found.")
             return []
     
+    def _generate_proxies(self):
+        """Generate proxies from external sources with validation"""
+        proxies = []
+        for source in self.config["proxy_sources"]:
+            try:
+                response = requests.get(source, timeout=10)
+                lines = response.text.splitlines()
+                
+                for line in lines:
+                    if ":" in line:
+                        ip, port = line.split(":")
+                        proxy = {"http": f"http://{ip}:{port}"}
+                        if self.validate_proxy(proxy):
+                            proxies.append(proxy)
+                
+                logging.info(f"Fetched {len(proxies)} valid proxies from {source}")
+                
+            except Exception as e:
+                logging.warning(f"Failed to fetch proxies from {source}: {e}")
+        
+        logging.info(f"Total valid proxies: {len(proxies)}")
+        return proxies
+    
+    def validate_proxy(self, proxy):
+        """Test if proxy works properly"""
+        try:
+            response = requests.get(
+                "https://httpbin.org/ip", 
+                proxies=proxy,
+                timeout=5
+            )
+            return response.status_code == 200
+        except:
+            return False
+    
     def get_random_proxy(self):
         """Get healthy proxy from pool"""
         if not self.proxy_pool:
@@ -86,5 +124,24 @@ class FacebookAutomation:
             if not self.proxy_pool:
                 raise Exception("No available proxies")
         return random.choice(self.proxy_pool)
+    
+    def create_account(self, email):
+        """Create account with rotating proxies"""
+        for attempt in range(self.config["max_retries"]):
+            proxy = self.get_random_proxy()
+            try:
+                # Use proxy for browser
+                chrome_options = Options()
+                chrome_options.add_argument(f"--proxy-server={proxy['http']}")
+                driver = webdriver.Chrome(options=chrome_options)
+                
+                # Rest of account creation code
+                
+                driver.quit()
+                break
+                
+            except Exception as e:
+                logging.warning(f"Proxy failed: {proxy}, Error: {e}")
+                continue
     
     # Rest of methods unchanged...
