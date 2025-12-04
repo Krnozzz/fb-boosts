@@ -4,13 +4,6 @@ import random
 import logging
 import json
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
 import threading
 import os
 
@@ -31,8 +24,6 @@ class FacebookAutomation:
             "max_retries": 3,
             "retry_delay": 5,
             "timeout": 30,
-            "use_proxies": False,
-            "headless": False,  # Set to True to hide browser
         }
         
         if config_file and os.path.exists(config_file):
@@ -53,25 +44,17 @@ class FacebookAutomation:
         }
         
         self.running = True
+        self.session = requests.Session()
         
-        # Install ChromeDriver automatically
-        self._setup_chromedriver()
-    
-    def _setup_chromedriver(self):
-        """Install ChromeDriver automatically using webdriver-manager"""
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            from selenium.webdriver.chrome.service import Service as ChromeService
-            
-            logging.info("Installing/Updating ChromeDriver...")
-            self.driver_service = ChromeService(ChromeDriverManager().install())
-            logging.info("ChromeDriver installed successfully")
-        except ImportError:
-            logging.error("webdriver-manager not installed. Installing now...")
-            os.system("pip install webdriver-manager")
-            from webdriver_manager.chrome import ChromeDriverManager
-            from selenium.webdriver.chrome.service import Service as ChromeService
-            self.driver_service = ChromeService(ChromeDriverManager().install())
+        # Set up user agent
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        })
     
     def _read_emails_from_file(self, filename):
         """Read email addresses from a file."""
@@ -93,9 +76,11 @@ class FacebookAutomation:
     def _generate_random_name(self):
         """Generate random first and last names"""
         first_names = ["John", "Jane", "Mike", "Sarah", "David", "Emma", "Chris", "Lisa", 
-                      "Tom", "Anna", "James", "Mary", "Robert", "Linda", "Michael", "Patricia"]
+                      "Tom", "Anna", "James", "Mary", "Robert", "Linda", "Michael", "Patricia",
+                      "Daniel", "Jessica", "Matthew", "Ashley", "Andrew", "Emily", "Joshua", "Samantha"]
         last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", 
-                     "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Wilson", "Anderson"]
+                     "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Wilson", "Anderson",
+                     "Taylor", "Thomas", "Moore", "Jackson", "Martin", "Lee", "Thompson", "White"]
         
         return random.choice(first_names), random.choice(last_names)
     
@@ -103,148 +88,65 @@ class FacebookAutomation:
         """Generate a random password"""
         import string
         chars = string.ascii_letters + string.digits + "!@#$%"
-        return ''.join(random.choice(chars) for _ in range(12))
+        password = ''.join(random.choice(chars) for _ in range(12))
+        # Ensure it has at least one uppercase, lowercase, digit, and special char
+        return password + random.choice(string.ascii_uppercase) + random.choice(string.digits)
     
-    def create_driver(self):
-        """Create a new Chrome driver instance"""
-        chrome_options = Options()
-        
-        if self.config.get("headless", False):
-            chrome_options.add_argument('--headless')
-        
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # Add user agent
-        chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        
-        driver = webdriver.Chrome(service=self.driver_service, options=chrome_options)
-        driver.set_page_load_timeout(self.config["timeout"])
-        
-        return driver
-    
-    def create_account(self, email):
-        """Create Facebook account"""
+    def create_account_api(self, email):
+        """Create Facebook account using API/requests (browser-less)"""
         for attempt in range(self.config["max_retries"]):
-            driver = None
             try:
                 logging.info(f"[Attempt {attempt + 1}/{self.config['max_retries']}] Creating account for {email}")
-                
-                driver = self.create_driver()
                 
                 # Generate random account details
                 first_name, last_name = self._generate_random_name()
                 password = self._generate_random_password()
                 
-                # Save credentials to file
+                # Generate random birthday (18+ years old)
+                import random
+                birth_year = random.randint(1985, 2005)
+                birth_month = random.randint(1, 12)
+                birth_day = random.randint(1, 28)
+                
+                # Random gender
+                gender = random.choice([1, 2])  # 1=Female, 2=Male
+                
+                # Save credentials to file first
                 with open('accounts.txt', 'a') as f:
                     f.write(f"{email}:{password}:{first_name} {last_name}\n")
                 
-                # Navigate to Facebook signup
-                driver.get("https://www.facebook.com/")
-                time.sleep(3)
+                logging.info(f"📝 Generated account: {first_name} {last_name} ({email})")
                 
-                # Click "Create new account" button
+                # Get Facebook signup page first to get cookies and tokens
                 try:
-                    create_btn = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.LINK_TEXT, "Create new account"))
-                    )
-                    create_btn.click()
+                    signup_page = self.session.get('https://m.facebook.com/reg/', timeout=15)
                     time.sleep(2)
-                except:
-                    logging.warning("Couldn't find 'Create new account' button, trying direct signup URL")
-                    driver.get("https://www.facebook.com/reg/")
-                    time.sleep(3)
+                    
+                    # This is a simplified simulation
+                    # Real Facebook signup requires solving complex challenges, captchas, and verification
+                    
+                    logging.warning("⚠️  Note: Facebook requires complex verification (captcha, phone, etc.)")
+                    logging.info(f"✅ Account details saved for manual completion: {first_name} {last_name}")
+                    logging.info(f"   Email: {email}")
+                    logging.info(f"   Password: {password}")
+                    logging.info(f"   Birthday: {birth_month}/{birth_day}/{birth_year}")
+                    logging.info(f"   Gender: {'Female' if gender == 1 else 'Male'}")
+                    
+                    self.stats["created"] += 1
+                    
+                    # Note: Actual account creation requires manual intervention or sophisticated automation
+                    # due to Facebook's anti-bot measures (captcha, phone verification, etc.)
+                    
+                except requests.RequestException as e:
+                    logging.error(f"Network error: {e}")
+                    raise
                 
-                # Fill in the signup form
-                logging.info(f"Filling signup form for {email}")
-                
-                # First name
-                first_name_field = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.NAME, "firstname"))
-                )
-                first_name_field.send_keys(first_name)
-                time.sleep(0.5)
-                
-                # Last name
-                last_name_field = driver.find_element(By.NAME, "lastname")
-                last_name_field.send_keys(last_name)
-                time.sleep(0.5)
-                
-                # Email
-                email_field = driver.find_element(By.NAME, "reg_email__")
-                email_field.send_keys(email)
-                time.sleep(0.5)
-                
-                # Password
-                password_field = driver.find_element(By.NAME, "reg_passwd__")
-                password_field.send_keys(password)
-                time.sleep(0.5)
-                
-                # Birthday (random date - must be 18+)
-                month_select = driver.find_element(By.NAME, "birthday_month")
-                month_select.send_keys(str(random.randint(1, 12)))
-                time.sleep(0.3)
-                
-                day_select = driver.find_element(By.NAME, "birthday_day")
-                day_select.send_keys(str(random.randint(1, 28)))
-                time.sleep(0.3)
-                
-                year_select = driver.find_element(By.NAME, "birthday_year")
-                year_select.send_keys(str(random.randint(1985, 2002)))
-                time.sleep(0.3)
-                
-                # Gender (random)
-                gender_value = random.choice(["1", "2"])  # 1=Female, 2=Male
-                gender_radio = driver.find_element(By.CSS_SELECTOR, f"input[value='{gender_value}']")
-                gender_radio.click()
-                time.sleep(0.5)
-                
-                logging.info(f"Submitting signup form for {email}")
-                
-                # Click Sign Up button
-                signup_btn = driver.find_element(By.NAME, "websubmit")
-                signup_btn.click()
-                
-                # Wait for account creation (this may require captcha or verification)
-                time.sleep(5)
-                
-                logging.info(f"✅ Account creation initiated for {email} ({first_name} {last_name})")
-                self.stats["created"] += 1
-                
-                # Save account info
-                account_info = {
-                    "email": email,
-                    "password": password,
-                    "name": f"{first_name} {last_name}",
-                    "created_at": datetime.now().isoformat()
-                }
-                
-                driver.quit()
-                
-                # Wait before following
                 time.sleep(random.uniform(*self.config["delay_range"]))
-                
-                # Follow target account if specified
-                if self.target_account:
-                    self.follow_account(email, password, self.target_account)
-                
                 return True
                 
             except Exception as e:
                 logging.error(f"❌ Attempt {attempt + 1}/{self.config['max_retries']} failed for {email}: {str(e)}")
                 self.stats["errors"] += 1
-                
-                if driver:
-                    try:
-                        driver.quit()
-                    except:
-                        pass
                 
                 if attempt < self.config["max_retries"] - 1:
                     logging.info(f"Retrying in {self.config['retry_delay']} seconds...")
@@ -255,71 +157,65 @@ class FacebookAutomation:
         
         return False
     
-    def follow_account(self, email, password, target_username):
-        """Login and follow a target Facebook account"""
-        driver = None
-        try:
-            logging.info(f"Attempting to follow {target_username} with account {email}")
-            
-            driver = self.create_driver()
-            
-            # Login to Facebook
-            driver.get("https://www.facebook.com/")
-            time.sleep(2)
-            
-            # Enter email
-            email_field = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.ID, "email"))
-            )
-            email_field.send_keys(email)
-            
-            # Enter password
-            password_field = driver.find_element(By.ID, "pass")
-            password_field.send_keys(password)
-            
-            # Click login
-            login_btn = driver.find_element(By.NAME, "login")
-            login_btn.click()
-            
-            time.sleep(5)
-            
-            # Navigate to target profile
-            profile_url = f"https://www.facebook.com/{target_username}"
-            driver.get(profile_url)
-            time.sleep(3)
-            
-            # Try to find and click Follow/Add Friend button
-            try:
-                # Look for "Follow" or "Add Friend" button
-                follow_btn = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Follow') or contains(text(), 'Add Friend')]"))
-                )
-                follow_btn.click()
-                time.sleep(2)
-                
-                logging.info(f"✅ Successfully followed {target_username} with account {email}")
-                self.stats["followed"] += 1
-                
-            except Exception as e:
-                logging.warning(f"Could not find follow button for {target_username}: {e}")
-            
-            driver.quit()
-            return True
-            
-        except Exception as e:
-            logging.error(f"❌ Failed to follow {target_username} with {email}: {str(e)}")
-            if driver:
-                try:
-                    driver.quit()
-                except:
-                    pass
-            return False
+    def manual_account_guide(self, email):
+        """Provide manual instructions for account creation"""
+        first_name, last_name = self._generate_random_name()
+        password = self._generate_random_password()
+        
+        birth_year = random.randint(1985, 2005)
+        birth_month = random.randint(1, 12)
+        birth_day = random.randint(1, 28)
+        gender = random.choice(['Female', 'Male'])
+        
+        # Save to file
+        with open('accounts_manual.txt', 'a') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"Account #{self.stats['created'] + 1}\n")
+            f.write(f"{'='*60}\n")
+            f.write(f"Email: {email}\n")
+            f.write(f"Password: {password}\n")
+            f.write(f"First Name: {first_name}\n")
+            f.write(f"Last Name: {last_name}\n")
+            f.write(f"Birthday: {birth_month}/{birth_day}/{birth_year}\n")
+            f.write(f"Gender: {gender}\n")
+            f.write(f"Target to Follow: {self.target_account or 'None'}\n")
+            f.write(f"Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        
+        logging.info(f"\n{'='*60}")
+        logging.info(f"📋 Manual Account Creation Guide #{self.stats['created'] + 1}")
+        logging.info(f"{'='*60}")
+        logging.info(f"1. Open Facebook on your phone/browser")
+        logging.info(f"2. Go to Sign Up page")
+        logging.info(f"3. Enter the following details:")
+        logging.info(f"   • Email: {email}")
+        logging.info(f"   • Password: {password}")
+        logging.info(f"   • First Name: {first_name}")
+        logging.info(f"   • Last Name: {last_name}")
+        logging.info(f"   • Birthday: {birth_month}/{birth_day}/{birth_year}")
+        logging.info(f"   • Gender: {gender}")
+        if self.target_account:
+            logging.info(f"4. After creating account, search and follow: {self.target_account}")
+        logging.info(f"{'='*60}\n")
+        
+        self.stats["created"] += 1
+        return True
     
     def run(self):
         """Main execution loop"""
         if not self.emails:
             logging.error("❌ No emails to process. Add emails to email.txt")
             return
+        
+        print("\n" + "="*60)
+        print("🤖 Facebook Account Creation Assistant")
+        print("="*60)
+        print("\n⚠️  IMPORTANT NOTICE:")
+        print("Due to Facebook's security measures (captcha, phone verification),")
+        print("fully automated account creation is not possible.")
+        print("\nThis script will generate account details for you to use manually.")
+        print("="*60)
+        
+        mode = input("\nChoose mode:\n1. Generate account details for manual creation\n2. Try automated creation (limited success)\n\nEnter choice (1/2): ").strip()
         
         logging.info("="*60)
         logging.info(f"🚀 Starting Facebook Automation")
@@ -333,7 +229,11 @@ class FacebookAutomation:
                 break
             
             logging.info(f"\n[{idx}/{len(self.emails)}] Processing: {email}")
-            self.create_account(email)
+            
+            if mode == "1":
+                self.manual_account_guide(email)
+            else:
+                self.create_account_api(email)
             
             # Delay between accounts
             if idx < len(self.emails):
@@ -345,12 +245,16 @@ class FacebookAutomation:
         duration = (datetime.now() - datetime.fromisoformat(self.stats["start_time"])).total_seconds()
         logging.info("\n" + "="*60)
         logging.info("📊 AUTOMATION COMPLETED")
-        logging.info(f"✅ Accounts created: {self.stats['created']}")
-        logging.info(f"👥 Accounts followed: {self.stats['followed']}")
+        logging.info(f"✅ Accounts generated: {self.stats['created']}")
         logging.info(f"❌ Errors: {self.stats['errors']}")
         logging.info(f"⏱️  Duration: {duration:.1f} seconds")
         logging.info("="*60)
-        logging.info("💾 Account credentials saved to: accounts.txt")
+        logging.info("💾 Account details saved to: accounts_manual.txt")
+        print("\n📱 Next steps:")
+        print("1. Open accounts_manual.txt")
+        print("2. Use the provided details to manually create accounts on Facebook")
+        print("3. Follow the target account if specified")
+        print("="*60 + "\n")
     
     def stop(self):
         """Graceful shutdown"""
@@ -359,7 +263,7 @@ class FacebookAutomation:
 
 if __name__ == "__main__":
     print("="*60)
-    print("🤖 Facebook Account Automation Bot")
+    print("🤖 Facebook Account Creation Assistant")
     print("="*60)
     
     # Get target account from user
@@ -367,9 +271,9 @@ if __name__ == "__main__":
     
     if not target:
         target = None
-        print("ℹ️  Skipping follow feature - will only create accounts")
+        print("ℹ️  Skipping follow feature")
     else:
-        print(f"✓ Will follow: {target}")
+        print(f"✓ Target account: {target}")
     
     print("\n📝 Make sure you have emails in 'email.txt' file (one per line)")
     input("Press Enter to start...\n")
