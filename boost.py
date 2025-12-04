@@ -52,32 +52,9 @@ def ngl():
         if not proxies_list:
             print("[-] No proxies fetched, using direct connection")
             return None
-
-        # Prioritize SOCKS5 first
-        socks5 = [p for p in proxies_list if "1080" in p or "socks5" in p]
-        http_https = [p for p in proxies_list if not ("1080" in p or "socks5" in p)]
-        proxies_list = socks5 + http_https
         random.shuffle(proxies_list)
-
-        for proxy in proxies_list[:20]:  # test only first 20
-            if proxy.startswith("socks5://"):
-                test_proxy = {"http": proxy, "https": proxy}
-            else:
-                test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
-            print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Testing proxy: {proxy}"))
-            try:
-                r = requests.get("http://httpbin.org/ip", proxies=test_proxy, timeout=10)
-                if r.status_code == 200:
-                    print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Using proxy: {proxy}"))
-                    return test_proxy   # ✅ immediately return first working proxy
-            except Exception:
-                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Dead proxy skipped: {proxy}"))
-                continue
-
-        # Forced fallback: use first proxy anyway
-        fallback = proxies_list[0]
-        print(Colorate.Horizontal(Colors.red_to_purple, f"[!] No validated proxies, forcing use of: {fallback}"))
-        return {"http": f"http://{fallback}", "https": f"http://{fallback}"}
+        # Just return the shuffled list, no validation
+        return proxies_list
 
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -97,13 +74,14 @@ def ngl():
     delay = float(input(Colorate.Vertical(Colors.blue_to_purple,"Delay (seconds, 0 for fastest): ")))
     use_proxy = input(Colorate.Vertical(Colors.blue_to_purple, "Use proxy? (y/n): ")).lower()
 
-    proxies = Proxy() if use_proxy == "y" else None
+    proxy_pool = Proxy() if use_proxy == "y" else None
+    proxy_index = 0
 
     sent_count = 0
     failed_count = 0
 
     print(Colorate.Vertical(Colors.green_to_blue,"**********************************************************"))
-    print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Starting run with proxy: {proxies if proxies else 'Direct connection'}"))
+    print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Starting run with {'proxies' if proxy_pool else 'Direct connection'}"))
 
     while sent_count < Count:
         headers = {
@@ -123,6 +101,13 @@ def ngl():
             'gameSlug': '',
             'referrer': '',
         }
+
+        # Pick current proxy
+        if proxy_pool:
+            current_proxy = proxy_pool[proxy_index % len(proxy_pool)]
+            proxies = {"http": f"http://{current_proxy}", "https": f"http://{current_proxy}"}
+        else:
+            proxies = None
 
         try:
             response = requests.post(
@@ -147,8 +132,8 @@ def ngl():
             print(f"Sent: {sent_count}")
             print(f"Failed: {failed_count}")
             print(f"Progress: {progress}")
-            if use_proxy == "y":
-                proxies = Proxy()  # fetch new proxy immediately
+            if proxy_pool:
+                proxy_index += 1  # rotate to next proxy
             continue
 
     print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Run complete — Sent: {sent_count}, Failed: {failed_count}, Progress: {sent_count+failed_count}/{Count}"))
