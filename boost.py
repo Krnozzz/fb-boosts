@@ -1,378 +1,151 @@
 import requests
-import time
 import random
-import logging
+import time
 import json
-from datetime import datetime
 import os
-from urllib.parse import quote
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('fb_follower_boost.log'),
-        logging.StreamHandler()
-    ]
-)
-
-class FacebookFollowerBooster:
+class NGLSpammer:
     def __init__(self):
-        self.config = {
-            "delay_range": (3, 7),
-            "max_retries": 3,
-            "retry_delay": 5,
+        self.base_url = "https://ngl.link"
+        self.session = requests.Session()
+        self.headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Content-Type": "application/json"
         }
-        
-        self.stats = {
-            "login_attempts": 0,
-            "successful_logins": 0,
-            "follow_attempts": 0,
-            "successful_follows": 0,
-            "errors": 0,
-            "start_time": datetime.now().isoformat()
-        }
-        
-        self.running = True
-        self.accounts = []
-        self.target_profile = None
+        self.messages = self._load_messages()
+        self.rate_limit = 60  # seconds between messages
+        self.proxy_sources = [
+            "https://www.proxy-list.download/api/v1/get?type=http",
+            "https://www.proxy-list.download/api/v1/get?type=https",
+            "https://www.proxy-list.download/api/v1/get?type=socks4",
+            "https://www.proxy-list.download/api/v1/get?type=socks5",
+            "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt",
+            "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt"
+        ]
+        self.proxy_pool = self._fetch_proxies()
     
-    def load_accounts(self, filename="accounts.txt"):
-        """Load accounts from file (format: email:password or email:password:name)"""
+    def _load_messages(self):
+        """Load messages from text file or generate defaults"""
         try:
-            if not os.path.exists(filename):
-                logging.error(f"❌ Account file '{filename}' not found!")
-                logging.info("📝 Create accounts.txt with format: email:password (one per line)")
-                return False
-            
-            with open(filename, 'r') as file:
-                for line in file:
-                    line = line.strip()
-                    if line and ':' in line:
-                        parts = line.split(':')
-                        if len(parts) >= 2:
-                            account = {
-                                'email': parts[0].strip(),
-                                'password': parts[1].strip(),
-                                'name': parts[2].strip() if len(parts) > 2 else 'Unknown'
-                            }
-                            self.accounts.append(account)
-            
-            logging.info(f"✅ Loaded {len(self.accounts)} accounts from {filename}")
-            return len(self.accounts) > 0
-            
-        except Exception as e:
-            logging.error(f"❌ Error loading accounts: {e}")
+            with open("messages.txt") as f:
+                return [line.strip() for line in f]
+        except FileNotFoundError:
+            return [
+                "Hey!",
+                "Hello there!",
+                "What's up?",
+                "How are you?",
+                "Nice to meet you!",
+                "I'm looking for someone to talk to."
+            ]
+    
+    def _fetch_proxies(self):
+        """Fetch proxies from external sources"""
+        proxies = []
+        for source in self.proxy_sources:
+            try:
+                response = requests.get(source, timeout=10)
+                lines = response.text.splitlines()
+                
+                for line in lines:
+                    if ":" in line:
+                        ip, port = line.split(":")
+                        proxy = {"http": f"http://{ip}:{port}"}
+                        if self.validate_proxy(proxy):
+                            proxies.append(proxy)
+                
+                print(f"Fetched {len(proxies)} valid proxies from {source}")
+                
+            except Exception as e:
+                print(f"Failed to fetch proxies from {source}: {e}")
+        
+        print(f"Total valid proxies: {len(proxies)}")
+        return proxies
+    
+    def validate_proxy(self, proxy):
+        """Test if proxy works properly"""
+        try:
+            response = requests.get(
+                "https://httpbin.org/ip", 
+                proxies=proxy,
+                timeout=5
+            )
+            return response.status_code == 200
+        except:
             return False
     
-    def create_session(self):
-        """Create a new session with headers"""
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://m.facebook.com/'
-        })
-        return session
+    def get_random_proxy(self):
+        """Get random proxy from pool"""
+        if not self.proxy_pool:
+            print("No proxies available, regenerating...")
+            self.proxy_pool = self._fetch_proxies()
+            if not self.proxy_pool:
+                raise Exception("No available proxies")
+        return random.choice(self.proxy_pool)
     
-    def login_account(self, session, email, password):
-        """Attempt to login to Facebook account"""
+    def send_message(self, username, message):
+        """Send message to NGL user"""
+        url = f"{self.base_url}/{username}"
+        
+        # Prepare payload
+        payload = {
+            "question": message,
+            "anonymous": "true"  # Send anonymously
+        }
+        
+        # Add proxy if available
+        proxies = self.get_random_proxy()
+        
         try:
-            logging.info(f"🔐 Attempting login: {email}")
-            self.stats["login_attempts"] += 1
-            
-            # Get login page
-            login_url = 'https://m.facebook.com/login.php'
-            response = session.get(login_url, timeout=15)
-            
-            if response.status_code != 200:
-                logging.error(f"❌ Failed to load login page: HTTP {response.status_code}")
-                return False
-            
-            # Prepare login data
-            login_data = {
-                'email': email,
-                'pass': password,
-                'login': 'Log In'
-            }
-            
-            # Submit login
-            time.sleep(random.uniform(1, 3))
-            login_response = session.post(
-                'https://m.facebook.com/login/device-based/regular/login/',
-                data=login_data,
-                timeout=15,
-                allow_redirects=True
+            response = self.session.post(
+                url, 
+                json=payload,
+                headers=self.headers,
+                proxies=proxies
             )
             
-            # Check if login was successful
-            if 'c_user' in session.cookies:
-                logging.info(f"✅ Login successful: {email}")
-                self.stats["successful_logins"] += 1
+            if response.status_code == 200:
                 return True
             else:
-                logging.warning(f"⚠️  Login may have failed for {email}")
-                # Check for common error indicators
-                if 'checkpoint' in login_response.url.lower():
-                    logging.error(f"❌ Account {email} requires verification (checkpoint)")
-                elif 'login' in login_response.url.lower():
-                    logging.error(f"❌ Invalid credentials for {email}")
-                else:
-                    logging.warning(f"⚠️  Unusual response, check manually")
+                print(f"Failed to send message: {response.status_code}")
                 return False
-            
-        except requests.RequestException as e:
-            logging.error(f"❌ Network error during login for {email}: {e}")
-            return False
+                
         except Exception as e:
-            logging.error(f"❌ Unexpected error during login for {email}: {e}")
+            print(f"Error sending message: {e}")
             return False
     
-    def follow_profile(self, session, target_username):
-        """Follow a Facebook profile"""
-        try:
-            logging.info(f"👤 Attempting to follow: {target_username}")
-            self.stats["follow_attempts"] += 1
+    def run(self, username, count=100):
+        """Send multiple messages to a user"""
+        start_time = datetime.now()
+        
+        for i in range(count):
+            message = random.choice(self.messages)
+            success = self.send_message(username, message)
             
-            # Navigate to profile
-            profile_url = f'https://m.facebook.com/{target_username}'
-            response = session.get(profile_url, timeout=15)
-            
-            if response.status_code != 200:
-                logging.error(f"❌ Failed to load profile: HTTP {response.status_code}")
-                return False
-            
-            # Look for profile ID in the page
-            # This is a simplified approach - actual implementation needs parsing
-            content = response.text
-            
-            # Try to find follow button or profile actions
-            # Note: Facebook's mobile HTML structure changes frequently
-            
-            if 'Subscribe' in content or 'Follow' in content or 'Add Friend' in content:
-                logging.info(f"✅ Profile found: {target_username}")
-                
-                # In reality, you need to:
-                # 1. Parse the page to find the follow/subscribe button
-                # 2. Extract the CSRF token
-                # 3. Find the user ID
-                # 4. Make a POST request to the follow endpoint
-                
-                # This is a simplified simulation
-                logging.warning("⚠️  Note: Actual follow action requires advanced parsing")
-                logging.info(f"📝 Visit manually: {profile_url}")
-                
-                # Simulate success for demonstration
-                time.sleep(random.uniform(2, 4))
-                self.stats["successful_follows"] += 1
-                return True
+            if success:
+                print(f"Message {i+1}/{count} sent successfully")
             else:
-                logging.error(f"❌ Could not find follow option for {target_username}")
-                return False
+                print(f"Failed to send message {i+1}/{count}")
             
-        except requests.RequestException as e:
-            logging.error(f"❌ Network error during follow: {e}")
-            return False
-        except Exception as e:
-            logging.error(f"❌ Unexpected error during follow: {e}")
-            return False
-    
-    def boost_followers(self, target_username):
-        """Main function to boost followers"""
-        self.target_profile = target_username
+            # Rate limiting
+            if i < count - 1:  # Don't sleep after last message
+                time.sleep(self.rate_limit)
         
-        if not self.accounts:
-            logging.error("❌ No accounts loaded!")
-            return
-        
-        logging.info("="*60)
-        logging.info(f"🚀 Starting Follower Boost")
-        logging.info(f"👤 Target: {target_username}")
-        logging.info(f"📊 Accounts to use: {len(self.accounts)}")
-        logging.info("="*60)
-        
-        for idx, account in enumerate(self.accounts, 1):
-            if not self.running:
-                break
-            
-            logging.info(f"\n{'='*60}")
-            logging.info(f"[{idx}/{len(self.accounts)}] Processing account: {account['email']}")
-            logging.info(f"{'='*60}")
-            
-            session = self.create_session()
-            
-            # Try to login
-            login_success = False
-            for attempt in range(self.config["max_retries"]):
-                try:
-                    if self.login_account(session, account['email'], account['password']):
-                        login_success = True
-                        break
-                    else:
-                        if attempt < self.config["max_retries"] - 1:
-                            logging.info(f"⏳ Retry {attempt + 2}/{self.config['max_retries']} in {self.config['retry_delay']}s...")
-                            time.sleep(self.config['retry_delay'])
-                except Exception as e:
-                    logging.error(f"❌ Error: {e}")
-                    self.stats["errors"] += 1
-            
-            if not login_success:
-                logging.error(f"❌ Failed to login with {account['email']}, skipping...")
-                continue
-            
-            # Try to follow
-            time.sleep(random.uniform(2, 4))
-            follow_success = False
-            
-            for attempt in range(self.config["max_retries"]):
-                try:
-                    if self.follow_profile(session, target_username):
-                        follow_success = True
-                        break
-                    else:
-                        if attempt < self.config["max_retries"] - 1:
-                            logging.info(f"⏳ Retry follow {attempt + 2}/{self.config['max_retries']}...")
-                            time.sleep(self.config['retry_delay'])
-                except Exception as e:
-                    logging.error(f"❌ Error: {e}")
-                    self.stats["errors"] += 1
-            
-            if follow_success:
-                logging.info(f"✅ Successfully followed with account {idx}/{len(self.accounts)}")
-            else:
-                logging.warning(f"⚠️  Could not follow with account {idx}/{len(self.accounts)}")
-            
-            # Delay between accounts to avoid detection
-            if idx < len(self.accounts):
-                delay = random.uniform(*self.config["delay_range"])
-                logging.info(f"⏳ Waiting {delay:.1f}s before next account...")
-                time.sleep(delay)
-        
-        self.print_final_stats()
-    
-    def print_final_stats(self):
-        """Print final statistics"""
-        duration = (datetime.now() - datetime.fromisoformat(self.stats["start_time"])).total_seconds()
-        
-        logging.info("\n" + "="*60)
-        logging.info("📊 FOLLOWER BOOST COMPLETED")
-        logging.info("="*60)
-        logging.info(f"👤 Target Profile: {self.target_profile}")
-        logging.info(f"🔐 Login Attempts: {self.stats['login_attempts']}")
-        logging.info(f"✅ Successful Logins: {self.stats['successful_logins']}")
-        logging.info(f"👥 Follow Attempts: {self.stats['follow_attempts']}")
-        logging.info(f"✅ Successful Follows: {self.stats['successful_follows']}")
-        logging.info(f"❌ Errors: {self.stats['errors']}")
-        logging.info(f"⏱️  Duration: {duration:.1f} seconds")
-        logging.info("="*60)
-        
-        # Success rate
-        if self.stats["login_attempts"] > 0:
-            login_rate = (self.stats["successful_logins"] / self.stats["login_attempts"]) * 100
-            logging.info(f"📈 Login Success Rate: {login_rate:.1f}%")
-        
-        if self.stats["follow_attempts"] > 0:
-            follow_rate = (self.stats["successful_follows"] / self.stats["follow_attempts"]) * 100
-            logging.info(f"📈 Follow Success Rate: {follow_rate:.1f}%")
-        
-        logging.info("="*60)
-    
-    def manual_boost_guide(self, target_username):
-        """Generate manual instructions for boosting"""
-        print("\n" + "="*60)
-        print("📱 MANUAL FOLLOWER BOOST GUIDE")
-        print("="*60)
-        print(f"\n🎯 Target Profile: https://facebook.com/{target_username}")
-        print(f"\n📊 You have {len(self.accounts)} accounts loaded")
-        print("\n📝 Steps for each account:")
-        print("1. Open Facebook in a browser/app")
-        print("2. Login with the account credentials below")
-        print(f"3. Visit: https://facebook.com/{target_username}")
-        print("4. Click 'Follow' or 'Add Friend' button")
-        print("5. Logout and repeat with next account")
-        print("\n" + "="*60)
-        
-        for idx, account in enumerate(self.accounts, 1):
-            print(f"\n[Account {idx}/{len(self.accounts)}]")
-            print(f"  Email: {account['email']}")
-            print(f"  Password: {account['password']}")
-            if account.get('name'):
-                print(f"  Name: {account['name']}")
-        
-        print("\n" + "="*60)
-        print("💡 TIP: Use different browsers or incognito tabs")
-        print("⚠️  WARNING: Facebook may detect and ban accounts")
-        print("="*60 + "\n")
-    
-    def stop(self):
-        """Graceful shutdown"""
-        self.running = False
-        logging.info("🛑 Stopping follower boost...")
-
-def main():
-    print("="*60)
-    print("🚀 Facebook Follower Booster")
-    print("="*60)
-    
-    booster = FacebookFollowerBooster()
-    
-    # Load accounts
-    print("\n📝 Loading accounts from accounts.txt...")
-    if not booster.load_accounts():
-        print("\n❌ No accounts found!")
-        print("\n📝 Create accounts.txt with this format:")
-        print("email1@example.com:password1")
-        print("email2@example.com:password2")
-        print("email3@example.com:password3")
-        return
-    
-    # Get target
-    target = input("\n👤 Enter Facebook username to boost (e.g., 'john.doe'): ").strip()
-    
-    if not target:
-        print("❌ No target specified!")
-        return
-    
-    print(f"\n✓ Target: {target}")
-    print(f"✓ Accounts: {len(booster.accounts)}")
-    
-    # Choose mode
-    print("\n" + "="*60)
-    print("Choose Mode:")
-    print("1. Automated boost (may have limitations)")
-    print("2. Manual boost guide (recommended)")
-    print("="*60)
-    
-    mode = input("Enter choice (1/2): ").strip()
-    
-    if mode == "2":
-        booster.manual_boost_guide(target)
-    else:
-        print("\n⚠️  IMPORTANT WARNINGS:")
-        print("• Facebook has strong anti-bot protection")
-        print("• Automated following may trigger security checks")
-        print("• Accounts may get banned or require verification")
-        print("• Manual method is more reliable")
-        
-        confirm = input("\nContinue with automated boost? (yes/no): ").strip().lower()
-        
-        if confirm == 'yes':
-            try:
-                booster.boost_followers(target)
-            except KeyboardInterrupt:
-                print("\n⚠️  Interrupted by user")
-                booster.stop()
-            except Exception as e:
-                print(f"\n❌ Fatal error: {e}")
-                booster.stop()
-        else:
-            print("\n✓ Showing manual guide instead...")
-            booster.manual_boost_guide(target)
+        end_time = datetime.now()
+        duration = end_time - start_time
+        print(f"Completed {count} messages in {duration.total_seconds():.2f} seconds")
 
 if __name__ == "__main__":
-    main()
+    # Get target username from command line or prompt
+    import sys
+    if len(sys.argv) > 1:
+        username = sys.argv[1]
+    else:
+        username = input("Enter NGL username: ")
+    
+    # Optional: specify message count
+    count = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+    
+    spammer = NGLSpammer()
+    spammer.run(username, count)
