@@ -29,27 +29,35 @@ def ngl():
         return random.choice(user_agents)
 
     def Proxy():
-        # ✅ Example free HTTPS proxies
-        proxies_list = [
-            "http://190.58.248.86:88",
-            "http://119.235.112.42:3128",
-            "http://58.216.109.17:800",
-            "http://58.216.109.14:800",
-            "http://194.219.134.234:80"
-        ]
+        # Load proxies from proxies.txt
+        try:
+            with open("proxies.txt", "r") as file:
+                proxies_list = [p.strip() for p in file.readlines() if p.strip()]
+        except FileNotFoundError:
+            print("[-] proxies.txt not found, using direct connection")
+            return None
 
-        # Shuffle and validate
         random.shuffle(proxies_list)
+
         for proxy in proxies_list:
-            test_proxy = {'http': proxy, 'https': proxy}
+            # Detect protocol automatically
+            if proxy.startswith("socks5://"):
+                test_proxy = {"http": proxy, "https": proxy}
+            elif proxy.startswith("https://") or proxy.startswith("http://"):
+                test_proxy = {"http": proxy, "https": proxy}
+            else:
+                # If no scheme provided, assume http://
+                test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+
             try:
-                # Test proxy with a lightweight request
-                requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
-                print(f"[+] Valid proxy found: {proxy}")
-                return test_proxy
-            except (ProxyError, ConnectionError, Timeout):
+                r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
+                if r.status_code == 200:
+                    print(f"[+] Valid proxy found: {proxy}")
+                    return test_proxy
+            except Exception:
                 print(f"[-] Dead proxy skipped: {proxy}")
                 continue
+
         print("[-] No working proxies available, using direct connection")
         return None
 
@@ -59,6 +67,7 @@ def ngl():
 
     os.system('cls' if os.name == 'nt' else 'clear')
 
+    # Updated ASCII banner to ANOS
     print(Colorate.Vertical(Colors.blue_to_purple,""" 
         ░█████╗░███╗░░██╗░█████╗░░██████╗
         ██╔══██╗████╗░██║██╔══██╗██╔════╝
@@ -66,7 +75,7 @@ def ngl():
         ██╔══██║██║╚████║██║░░██║░╚═══██╗
         ██║░░██║██║░╚███║╚█████╔╝██████╔╝
         ╚═╝░░╚═╝╚═╝░░╚══╝░╚════╝░╚═════╝░
-"""))
+    """))
 
     nglusername = input(Colorate.Vertical(Colors.blue_to_purple,"Username: "))
     message = input(Colorate.Vertical(Colors.blue_to_purple,"Message: "))
