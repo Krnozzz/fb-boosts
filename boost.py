@@ -1,168 +1,125 @@
-import requests
 import random
-import time
-import json
+import string
+import requests
 import os
-from datetime import datetime
-import colorama
-from colorama import Fore, Style
+from pystyle import Colors, Colorate
+import time
 
-colorama.init(autoreset=True)
+def ngl():
+    def deviceId():
+        characters = string.ascii_lowercase + string.digits
 
-class NGLSpammer:
-    def __init__(self):
-        self.session = requests.Session()
-        self.headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Content-Type": "application/json"
+        part1 = ''.join(random.choices(characters, k=8))
+        part2 = ''.join(random.choices(characters, k=4))
+        part3 = ''.join(random.choices(characters, k=4))
+        part4 = ''.join(random.choices(characters, k=4))
+        part5 = ''.join(random.choices(characters, k=12))
+
+        device_id = f"{part1}-{part2}-{part3}-{part4}-{part5}"
+
+        return device_id
+    
+    def UserAgent():
+        with open('user-agents.txt', 'r') as file:
+            user_agents = file.readlines()
+            random_user_agent = random.choice(user_agents).strip()
+            
+            return random_user_agent
+            
+    def Proxy():
+        with open('proxies.txt', 'r') as file:
+            proxies_list = file.readlines()
+            if not proxies_list:
+                print(R + "[-]" + W + " Error: proxies.txt is empty. Please add proxies to the file.")
+                exit(1)
+            random_proxy = random.choice(proxies_list).strip()
+
+        proxies = {
+            'http': random_proxy,
+            'https': random_proxy
         }
-        self.messages = self._load_messages()
-        self.rate_limit = 60  # seconds between messages
-        self.proxy_sources = [
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
-            "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
-        ]
-        self.proxy_pool = self._fetch_proxies()
-        self.success_count = 0
-        self.failed_count = 0
-        self.error_count = 0
-    
-    def _load_messages(self):
-        """Load messages from text file or generate defaults"""
-        try:
-            with open("messages.txt") as f:
-                return [line.strip() for line in f]
-        except FileNotFoundError:
-            return [
-                "Hey!",
-                "Hello there!",
-                "What's up?",
-                "How are you?",
-                "Nice to meet you!",
-                "I'm looking for someone to talk to."
-            ]
-    
-    def _fetch_proxies(self):
-        """Fetch proxies from external sources"""
-        proxies = []
-        for source in self.proxy_sources:
-            try:
-                response = requests.get(source, timeout=10)
-                lines = response.text.splitlines()
-                
-                for line in lines:
-                    if ":" in line:
-                        ip, port = line.split(":")
-                        proxy = {"http": f"http://{ip}:{port}"}
-                        if self.validate_proxy(proxy):
-                            proxies.append(proxy)
-                
-                print(f"Fetched {len(proxies)} valid proxies from {source}")
-                
-            except Exception as e:
-                print(f"Failed to fetch proxies from {source}: {e}")
-        
-        print(f"Total valid proxies: {len(proxies)}")
         return proxies
-    
-    def validate_proxy(self, proxy):
-        """Test if proxy works properly"""
-        try:
-            response = requests.get(
-                "https://httpbin.org/ip", 
-                proxies=proxy,
-                timeout=5
-            )
-            return response.status_code == 200
-        except:
-            return False
-    
-    def get_random_proxy(self):
-        """Get random proxy from pool"""
-        if not self.proxy_pool:
-            print("No proxies available, regenerating...")
-            self.proxy_pool = self._fetch_proxies()
-            if not self.proxy_pool:
-                raise Exception("No available proxies")
-        return random.choice(self.proxy_pool)
-    
-    def send_message(self, link, message):
-        """Send message to NGL user via full link"""
-        # Extract username from link
-        username = link.split("/")[-1]
         
-        # Prepare payload
-        payload = {
-            "question": message,
-            "anonymous": "true"  # Send anonymously
-        }
-        
-        # Add proxy if available
-        proxies = self.get_random_proxy()
-        
-        try:
-            response = self.session.post(
-                link, 
-                json=payload,
-                headers=self.headers,
-                proxies=proxies
-            )
-            
-            if response.status_code == 200:
-                self.success_count += 1
-                return True
-            else:
-                self.failed_count += 1
-                return False
-                
-        except Exception as e:
-            self.error_count += 1
-            print(f"Error sending message: {e}")
-            return False
-    
-    def run(self, link, count=100):
-        """Send multiple messages to a user via link"""
-        start_time = datetime.now()
-        print(f"{Fore.CYAN}Starting spamming {count} messages to {link}...")
-        
-        for i in range(count):
-            message = random.choice(self.messages)
-            success = self.send_message(link, message)
-            
-            if success:
-                status = f"{Fore.GREEN}✓"
-            else:
-                status = f"{Fore.RED}✗"
-            
-            print(f"Message {i+1}/{count}: {status} Sent")
-            
-            # Rate limiting
-            if i < count - 1:  # Don't sleep after last message
-                time.sleep(self.rate_limit)
-        
-        end_time = datetime.now()
-        duration = end_time - start_time
-        
-        # Print summary
-        print("\n" + "="*50)
-        print(f"{Fore.GREEN}Success: {self.success_count}")
-        print(f"{Fore.RED}Failed: {self.failed_count}")
-        print(f"{Fore.YELLOW}Errors: {self.error_count}")
-        print(f"{Fore.BLUE}Total: {count}")
-        print(f"{Fore.MAGENTA}Duration: {duration.total_seconds():.2f} seconds")
-        print("="*50)
+    R = '\033[31m'
+    G = '\033[32m'
+    W = '\033[0m'
 
-if __name__ == "__main__":
-    # Get target link from command line or prompt
-    import sys
-    if len(sys.argv) > 1:
-        link = sys.argv[1]
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+
+    print(Colorate.Vertical(Colors.blue_to_purple,"""
+        ░██████╗███╗░░░███╗░█████╗░██╗░░██╗███████╗
+        ██╔════╝████╗░████║██╔══██╗██║░██╔╝██╔════╝
+        ╚█████╗░██╔████╔██║███████║█████═╝░█████╗░░
+        ░╚═══██╗██║╚██╔╝██║██╔══██║██╔═██╗░██╔══╝░░
+        ██████╔╝██║░╚═╝░██║██║░░██║██║░╚██╗██████╗
+        ╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝░░╚═╝╚══════╝  
+    """))
+    
+    
+    nglusername = input(Colorate.Vertical(Colors.blue_to_purple,"Username: "))
+    message = input(Colorate.Vertical(Colors.blue_to_purple,"Message: "))
+    Count = int(input(Colorate.Vertical(Colors.blue_to_purple,"Count: ")))
+    delay = float(input(Colorate.Vertical(Colors.blue_to_purple,"Delay between requests (enter 0 if you want the fastest in seconds): ")))
+    use_proxy = input(Colorate.Vertical(Colors.blue_to_purple, "Use proxy? (y/n): ")).lower()
+
+    if use_proxy == "y":
+        proxies = Proxy()
     else:
-        link = input("Enter NGL link: ")
-    
-    # Optional: specify message count
-    count = int(sys.argv[2]) if len(sys.argv) > 2 else 100
-    
-    spammer = NGLSpammer()
-    spammer.run(link, count)
+        proxies = None
+
+    print(Colorate.Vertical(Colors.green_to_blue,"**********************************************************"))
+
+    value = 0
+    notsend = 0
+    while value < Count:
+        headers = {
+            'Host': 'ngl.link',
+            'sec-ch-ua': '"Google Chrome";v="113", "Chromium";v="113", "Not-A.Brand";v="24"',
+            'accept': '*/*',
+            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'x-requested-with': 'XMLHttpRequest',
+            'sec-ch-ua-mobile': '?0',
+            'user-agent': f'{UserAgent()}',
+            'sec-ch-ua-platform': '"Windows"',
+            'origin': 'https://ngl.link',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-dest': 'empty',
+            'referer': f'https://ngl.link/{nglusername}',
+            'accept-language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+        }
+
+        data = {
+            'username': f'{nglusername}',
+            'question': f'{message}',
+            'deviceId': f'{deviceId()}',
+            'gameSlug': '',
+            'referrer': '',
+        }
+
+        try:
+            response = requests.post('https://ngl.link/api/submit', headers=headers, data=data, proxies=proxies)
+            if response.status_code == 200:
+                notsend = 0
+                value += 1
+                print(G + "[+]" + W + "Send =>" + G + "{}".format(value) + W)
+            else:
+                notsend += 1
+                print(R + "[-]" + W + "Not Send")
+            if notsend == 4:
+                print(R + "[!]" + W + "Changing information")
+                deviceId()
+                UserAgent()
+                if use_proxy == "y":
+                    proxies = Proxy()
+                notsend = 0
+
+            time.sleep(delay)  
+
+        except requests.exceptions.ProxyError as e:
+            print(R + "[-]" + W + "Bad Proxy!" + W)
+            if use_proxy == "y":
+                proxies = Proxy()
+
+ngl()
