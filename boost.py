@@ -39,9 +39,9 @@ class FacebookAutomation:
             "redis_host": "localhost",
             "redis_port": 6379,
             "proxy_sources": [
-                "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
-                "https://www.proxy-list.download/api/v1/get?type=http",
-                "https://www.proxy-list.download/api/v1/get?type=https"
+                "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
+                "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
+                "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt"
             ]
         }
         
