@@ -53,7 +53,12 @@ def ngl():
             print("[-] No proxies fetched, using direct connection")
             return None
 
+        # Prioritize SOCKS5 first
+        socks5 = [p for p in proxies_list if "1080" in p or "socks5" in p]
+        http_https = [p for p in proxies_list if not ("1080" in p or "socks5" in p)]
+        proxies_list = socks5 + http_https
         random.shuffle(proxies_list)
+
         for proxy in proxies_list[:20]:  # test only first 20
             if proxy.startswith("socks5://"):
                 test_proxy = {"http": proxy, "https": proxy}
@@ -61,7 +66,7 @@ def ngl():
                 test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
             print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Testing proxy: {proxy}"))
             try:
-                r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
+                r = requests.get("http://httpbin.org/ip", proxies=test_proxy, timeout=10)
                 if r.status_code == 200:
                     print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Using proxy: {proxy}"))
                     return test_proxy   # ✅ immediately return first working proxy
@@ -69,8 +74,10 @@ def ngl():
                 print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Dead proxy skipped: {proxy}"))
                 continue
 
-        print("[-] No working proxies found, using direct connection")
-        return None
+        # Forced fallback: use first proxy anyway
+        fallback = proxies_list[0]
+        print(Colorate.Horizontal(Colors.red_to_purple, f"[!] No validated proxies, forcing use of: {fallback}"))
+        return {"http": f"http://{fallback}", "https": f"http://{fallback}"}
 
     os.system('cls' if os.name == 'nt' else 'clear')
 
