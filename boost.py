@@ -37,14 +37,11 @@ def ngl():
         ]
         for url in sources:
             try:
-                print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Fetching proxies from {url} ..."))
                 r = requests.get(url, timeout=10)
                 new_proxies = [p.strip() for p in r.text.splitlines() if p.strip() and ":" in p]
                 proxies += new_proxies
-                print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Got {len(new_proxies)} proxies from {url}"))
-            except Exception as e:
-                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Failed to fetch from {url}: {e}"))
-        print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Total proxies fetched: {len(proxies)}"))
+            except Exception:
+                continue
         return proxies
 
     def Proxy():
@@ -55,21 +52,13 @@ def ngl():
                 test_proxy = {"http": proxy, "https": proxy}
             else:
                 test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
-            print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Testing proxy: {proxy}"))
             try:
                 r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
                 if r.status_code == 200:
-                    print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Valid proxy found: {proxy}"))
-                    return test_proxy
+                    return test_proxy   # ✅ immediately return first working proxy
             except Exception:
-                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Dead proxy skipped: {proxy}"))
                 continue
-        print(Colorate.Horizontal(Colors.red_to_purple, "[-] No working proxies available, using direct connection"))
         return None
-
-    R = '\033[31m'
-    G = '\033[32m'
-    W = '\033[0m'
 
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -91,10 +80,10 @@ def ngl():
 
     proxies = Proxy() if use_proxy == "y" else None
 
-    print(Colorate.Vertical(Colors.green_to_blue,"**********************************************************"))
+    sent_count = 0
+    failed_count = 0
 
-    value = 0
-    while value < Count:
+    while sent_count < Count:
         headers = {
             'Host': 'ngl.link',
             'accept': '*/*',
@@ -113,31 +102,27 @@ def ngl():
             'referrer': '',
         }
 
-        attempts = 0
-        success = False
-        while attempts < 5 and not success:
-            try:
-                response = requests.post(
-                    'https://ngl.link/api/submit',
-                    headers=headers,
-                    data=data,
-                    proxies=proxies,
-                    timeout=10
-                )
-                if response.status_code == 200:
-                    value += 1
-                    print(G + "[+]" + W + f" Send => {value}")
-                    success = True
-                else:
-                    print(R + "[-]" + W + " Not Sent")
-                time.sleep(delay)
-            except (ProxyError, ConnectionError, Timeout):
-                print(R + "[-]" + W + " Proxy/Connection failed, retrying with new proxy...")
-                if use_proxy == "y":
-                    proxies = Proxy()
-                attempts += 1
-                continue
-        if not success:
-            print(R + "[!] Skipping this request after 5 failed attempts")
+        try:
+            response = requests.post(
+                'https://ngl.link/api/submit',
+                headers=headers,
+                data=data,
+                proxies=proxies,
+                timeout=10
+            )
+            if response.status_code == 200:
+                sent_count += 1
+            else:
+                failed_count += 1
+            print(f"Sent: {sent_count}")
+            print(f"Failed: {failed_count}")
+            time.sleep(delay)
+        except (ProxyError, ConnectionError, Timeout):
+            failed_count += 1
+            print(f"Sent: {sent_count}")
+            print(f"Failed: {failed_count}")
+            if use_proxy == "y":
+                proxies = Proxy()  # fetch new proxy immediately
+            continue
 
 ngl()
