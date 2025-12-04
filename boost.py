@@ -49,7 +49,9 @@ class FacebookAutomation:
             with open(config_file) as f:
                 self.config.update(json.load(f))
         
-        self.emails = []
+        # Read emails from file
+        self.emails = self._read_emails_from_file("email.txt")
+        
         self.active_session = None
         self.proxy_pool = self._generate_proxies()
         self.stats = {
@@ -67,36 +69,14 @@ class FacebookAutomation:
         self.dashboard_thread.daemon = True
         self.dashboard_thread.start()
     
-    def _generate_proxies(self):
-        """Generate proxies from external sources"""
-        proxies = []
-        
-        for source in self.config["proxy_sources"]:
-            try:
-                response = requests.get(source, timeout=10)
-                lines = response.text.splitlines()
-                
-                for line in lines:
-                    if ":" in line:
-                        ip, port = line.split(":")
-                        proxies.append({"http": f"http://{ip}:{port}"})
-                
-                logging.info(f"Fetched {len(lines)} proxies from {source}")
-                
-            except Exception as e:
-                logging.warning(f"Failed to fetch proxies from {source}: {e}")
-        
-        # Remove duplicates
-        unique_proxies = []
-        seen = set()
-        for p in proxies:
-            key = p["http"]
-            if key not in seen:
-                seen.add(key)
-                unique_proxies.append(p)
-        
-        logging.info(f"Total unique proxies: {len(unique_proxies)}")
-        return unique_proxies
+    def _read_emails_from_file(self, filename):
+        """Read email addresses from a file."""
+        try:
+            with open(filename, 'r') as file:
+                return [line.strip() for line in file]
+        except FileNotFoundError:
+            logging.error(f"Email file '{filename}' not found.")
+            return []
     
     def get_random_proxy(self):
         """Get healthy proxy from pool"""
