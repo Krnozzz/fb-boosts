@@ -30,29 +30,21 @@ def ngl():
 
     def fetch_proxies():
         proxies = []
+        sources = [
+            # HTTPS proxies
+            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=https&timeout=5000&country=all&ssl=all&anonymity=all",
+            # SOCKS5 proxies
+            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all"
+        ]
 
-        # Source 1: Proxyscrape HTTPS proxies
-        try:
-            url1 = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=https&timeout=5000&country=all&ssl=all&anonymity=all"
-            r1 = requests.get(url1, timeout=10)
-            proxies += [p.strip() for p in r1.text.splitlines() if p.strip()]
-            print(f"[+] Got {len(proxies)} proxies from Proxyscrape")
-        except Exception as e:
-            print("[-] Failed to fetch from Proxyscrape:", e)
-
-        # Source 2: FreeProxyWorld (raw list)
-        try:
-            url2 = "https://www.freeproxy.world/?type=https&anonymity=all&country=&port=&page=1"
-            r2 = requests.get(url2, timeout=10)
-            # crude extraction of IP:port from HTML
-            for line in r2.text.splitlines():
-                if ":" in line and "." in line:
-                    candidate = line.strip()
-                    if candidate.count(".") >= 3 and ":" in candidate:
-                        proxies.append(candidate)
-            print(f"[+] Got {len(proxies)} proxies total after FreeProxyWorld")
-        except Exception as e:
-            print("[-] Failed to fetch from FreeProxyWorld:", e)
+        for url in sources:
+            try:
+                r = requests.get(url, timeout=10)
+                new_proxies = [p.strip() for p in r.text.splitlines() if p.strip() and ":" in p]
+                proxies += new_proxies
+                print(f"[+] Got {len(new_proxies)} proxies from {url}")
+            except Exception as e:
+                print(f"[-] Failed to fetch from {url}: {e}")
 
         return proxies
 
@@ -61,7 +53,11 @@ def ngl():
         random.shuffle(proxies_list)
 
         for proxy in proxies_list:
-            test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+            if proxy.startswith("socks5://"):
+                test_proxy = {"http": proxy, "https": proxy}
+            else:
+                test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+
             try:
                 r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
                 if r.status_code == 200:
@@ -101,7 +97,6 @@ def ngl():
     print(Colorate.Vertical(Colors.green_to_blue,"**********************************************************"))
 
     value = 0
-    notsend = 0
     while value < Count:
         headers = {
             'Host': 'ngl.link',
@@ -131,24 +126,17 @@ def ngl():
                 timeout=10
             )
             if response.status_code == 200:
-                notsend = 0
                 value += 1
                 print(G + "[+]" + W + f" Send => {value}")
             else:
-                notsend += 1
                 print(R + "[-]" + W + " Not Sent")
-
-            if notsend >= 3:
-                print(R + "[!]" + W + " Rotating info...")
-                if use_proxy == "y":
-                    proxies = Proxy()
-                notsend = 0
 
             time.sleep(delay)
 
         except (ProxyError, ConnectionError, Timeout):
-            print(R + "[-]" + W + " Proxy/Connection failed, rotating...")
+            print(R + "[-]" + W + " Proxy/Connection failed, retrying with new proxy...")
             if use_proxy == "y":
                 proxies = Proxy()
+            continue  # immediately retry with new proxy
 
 ngl()
