@@ -31,43 +31,40 @@ def ngl():
     def fetch_proxies():
         proxies = []
         sources = [
-            # HTTPS proxies
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=https&timeout=5000&country=all&ssl=all&anonymity=all",
-            # SOCKS5 proxies
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all"
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/https.txt",
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
         ]
-
         for url in sources:
             try:
+                print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Fetching proxies from {url} ..."))
                 r = requests.get(url, timeout=10)
                 new_proxies = [p.strip() for p in r.text.splitlines() if p.strip() and ":" in p]
                 proxies += new_proxies
-                print(f"[+] Got {len(new_proxies)} proxies from {url}")
+                print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Got {len(new_proxies)} proxies from {url}"))
             except Exception as e:
-                print(f"[-] Failed to fetch from {url}: {e}")
-
+                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Failed to fetch from {url}: {e}"))
+        print(Colorate.Horizontal(Colors.green_to_blue, f"[✓] Total proxies fetched: {len(proxies)}"))
         return proxies
 
     def Proxy():
         proxies_list = fetch_proxies()
         random.shuffle(proxies_list)
-
         for proxy in proxies_list:
             if proxy.startswith("socks5://"):
                 test_proxy = {"http": proxy, "https": proxy}
             else:
                 test_proxy = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
-
+            print(Colorate.Horizontal(Colors.blue_to_purple, f"[~] Testing proxy: {proxy}"))
             try:
                 r = requests.get("https://httpbin.org/ip", proxies=test_proxy, timeout=5)
                 if r.status_code == 200:
-                    print(f"[+] Valid proxy found: {proxy}")
+                    print(Colorate.Horizontal(Colors.green_to_blue, f"[+] Valid proxy found: {proxy}"))
                     return test_proxy
             except Exception:
-                print(f"[-] Dead proxy skipped: {proxy}")
+                print(Colorate.Horizontal(Colors.red_to_purple, f"[-] Dead proxy skipped: {proxy}"))
                 continue
-
-        print("[-] No working proxies available, using direct connection")
+        print(Colorate.Horizontal(Colors.red_to_purple, "[-] No working proxies available, using direct connection"))
         return None
 
     R = '\033[31m'
@@ -108,7 +105,6 @@ def ngl():
             'referer': f'https://ngl.link/{nglusername}',
             'accept-language': 'en-US,en;q=0.9',
         }
-
         data = {
             'username': nglusername,
             'question': message,
@@ -117,26 +113,31 @@ def ngl():
             'referrer': '',
         }
 
-        try:
-            response = requests.post(
-                'https://ngl.link/api/submit',
-                headers=headers,
-                data=data,
-                proxies=proxies,
-                timeout=10
-            )
-            if response.status_code == 200:
-                value += 1
-                print(G + "[+]" + W + f" Send => {value}")
-            else:
-                print(R + "[-]" + W + " Not Sent")
-
-            time.sleep(delay)
-
-        except (ProxyError, ConnectionError, Timeout):
-            print(R + "[-]" + W + " Proxy/Connection failed, retrying with new proxy...")
-            if use_proxy == "y":
-                proxies = Proxy()
-            continue  # immediately retry with new proxy
+        attempts = 0
+        success = False
+        while attempts < 5 and not success:
+            try:
+                response = requests.post(
+                    'https://ngl.link/api/submit',
+                    headers=headers,
+                    data=data,
+                    proxies=proxies,
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    value += 1
+                    print(G + "[+]" + W + f" Send => {value}")
+                    success = True
+                else:
+                    print(R + "[-]" + W + " Not Sent")
+                time.sleep(delay)
+            except (ProxyError, ConnectionError, Timeout):
+                print(R + "[-]" + W + " Proxy/Connection failed, retrying with new proxy...")
+                if use_proxy == "y":
+                    proxies = Proxy()
+                attempts += 1
+                continue
+        if not success:
+            print(R + "[!] Skipping this request after 5 failed attempts")
 
 ngl()
