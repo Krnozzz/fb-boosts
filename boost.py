@@ -37,7 +37,12 @@ class FacebookAutomation:
             "log_level": "INFO",
             "dashboard_port": 8080,
             "redis_host": "localhost",
-            "redis_port": 6379
+            "redis_port": 6379,
+            "proxy_sources": [
+                "https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
+                "https://www.proxy-list.download/api/v1/get?type=http",
+                "https://www.proxy-list.download/api/v1/get?type=https"
+            ]
         }
         
         if config_file:
@@ -46,7 +51,7 @@ class FacebookAutomation:
         
         self.emails = []
         self.active_session = None
-        self.proxy_pool = self._load_proxies()
+        self.proxy_pool = self._generate_proxies()
         self.stats = {
             "created": 0,
             "followed": 0,
@@ -62,64 +67,44 @@ class FacebookAutomation:
         self.dashboard_thread.daemon = True
         self.dashboard_thread.start()
     
-    def _load_proxies(self):
-        """Load proxies from file"""
+    def _generate_proxies(self):
+        """Generate proxies from external sources"""
         proxies = []
-        try:
-            with open("proxy.txt") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("http://"):
-                        proxies.append({"http": line})
-                    elif line.startswith("https://"):
-                        proxies.append({"https": line})
-            logging.info(f"Loaded {len(proxies)} proxies from file")
-        except Exception as e:
-            logging.error(f"Failed to load proxies: {e}")
-        return proxies
+        
+        for source in self.config["proxy_sources"]:
+            try:
+                response = requests.get(source, timeout=10)
+                lines = response.text.splitlines()
+                
+                for line in lines:
+                    if ":" in line:
+                        ip, port = line.split(":")
+                        proxies.append({"http": f"http://{ip}:{port}"})
+                
+                logging.info(f"Fetched {len(lines)} proxies from {source}")
+                
+            except Exception as e:
+                logging.warning(f"Failed to fetch proxies from {source}: {e}")
+        
+        # Remove duplicates
+        unique_proxies = []
+        seen = set()
+        for p in proxies:
+            key = p["http"]
+            if key not in seen:
+                seen.add(key)
+                unique_proxies.append(p)
+        
+        logging.info(f"Total unique proxies: {len(unique_proxies)}")
+        return unique_proxies
     
     def get_random_proxy(self):
         """Get healthy proxy from pool"""
         if not self.proxy_pool:
-            raise Exception("No available proxies")
+            logging.warning("No proxies available, regenerating...")
+            self.proxy_pool = self._generate_proxies()
+            if not self.proxy_pool:
+                raise Exception("No available proxies")
         return random.choice(self.proxy_pool)
     
-    def get_temp_email(self):
-        """Generate temporary email with fallbacks"""
-        urls = [
-            "https://api.temp-mail.org/request/domains/",
-            "https://api.guerrillamail.com/ajax.php?a=get_email_address"
-        ]
-        
-        for url in urls:
-            try:
-                response = requests.get(url, timeout=5)
-                if "domains" in response.text:
-                    domain = response.json()['domains'][0]
-                else:
-                    domain = response.json()['email_user'] + "@" + response.json()['email_domain']
-                return f"automation{int(time.time())}@{domain}"
-            except Exception as e:
-                logging.warning(f"URL failed: {url} - {e}")
-        
-        logging.error("All email services failed")
-        return f"automation{int(time.time())}@example.com"
-    
-    # Rest of the methods remain unchanged...
-
-def main():
-    # Initialize automation
-    fb = FacebookAutomation()
-    
-    try:
-        while fb.running:
-            fb.run_cycle()
-            
-    except KeyboardInterrupt:
-        logging.info("Automation stopped by user")
-    finally:
-        report = fb.stop()
-        return report
-
-if __name__ == "__main__":
-    main()
+    # Rest of methods unchanged...
